@@ -180,7 +180,7 @@ groups:
           scale_limit: 6
           scale_direction: '<'
           scale_threshold: 6
-          service_selector: .*nodejs_host.*.process.node.cpu.percent
+          service_selector: .*k8s_node_host.*.process.node.cpu.percent
           cooldown_time: 60
         triggers:
           execute_scale_workflow:
@@ -201,7 +201,7 @@ groups:
           scale_limit: 1
           scale_direction: '>'
           scale_threshold: 1
-          service_selector: .*nodejs_host.*.process.node.cpu.percent
+          service_selector: .*k8s_node_host.*.process.node.cpu.percent
           cooldown_time: 60
         triggers:
           execute_scale_workflow:
@@ -220,7 +220,7 @@ groups:
         type: cloudify.policies.types.host_failure
         properties:
           service:
-            - .*nodejs_host.*.cpu.total.system
+            - .*k8s_node_host.*.cpu.total.system
           interval_between_workflows: 60
         triggers:
           auto_heal_trigger:
