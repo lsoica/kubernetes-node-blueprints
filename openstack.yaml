@@ -172,8 +172,8 @@ groups:
           policy_operates_on_group: true
           scale_limit: 10
           scale_direction: '<'
-          scale_threshold: 10
-          service_selector: .*k8s_node_host.*.process.node.cpu.percent
+          scale_threshold: 50
+          service_selector: .*k8s_node_host.*.cpu_total_idle
           cooldown_time: 60
         triggers:
           execute_scale_workflow:
@@ -193,8 +193,8 @@ groups:
         properties:
           scale_limit: 2
           scale_direction: '>'
-          scale_threshold: 1
-          service_selector: .*k8s_node_host.*.process.node.cpu.percent
+          scale_threshold: 90
+          service_selector: .*k8s_node_host.*.cpu_total_idle
           cooldown_time: 60
         triggers:
           execute_scale_workflow:
