@@ -64,8 +64,6 @@ node_templates:
     relationships:
       - target: kubernetes_node_port
         type: cloudify.openstack.server_connected_to_port
-      - type: cloudify.relationships.contained_in
-        target: scaling_group
     interfaces:
       cloudify.interfaces.lifecycle:
         create:
@@ -123,12 +121,6 @@ node_templates:
       - type: cloudify.openstack.port_connected_to_security_group
         target: kubernetes_security_group
 
-  scaling_group:
-    type: cloudify.nodes.Root
-    relationships:
-    - type: cloudify.relationships.contained_in
-      target: openstack
-
   public_subnet:
     type: cloudify.openstack.nodes.Subnet
     properties:
@@ -147,9 +139,6 @@ node_templates:
       openstack_config: *openstack_config
       use_external_resource: true
       resource_id: { get_secret: public_network_name }
-    relationships:
-    - type: cloudify.relationships.contained_in
-      target: scaling_group
 
   router:
     type: cloudify.openstack.nodes.Router
@@ -173,7 +162,6 @@ groups:
     members:
       - k8s_node_host
       - kubernetes_node_port
-      - scaling_group
 
   scale_up_group:
     members: [k8s_node_host]
