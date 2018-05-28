@@ -12,6 +12,7 @@ imports:
   - plugin:cloudify-openstack-plugin
   - imports/kubernetes.yaml
   - imports/cloud-config.yaml
+  - types/scale/scale.yaml
 
 inputs:
 
@@ -61,10 +62,10 @@ node_templates:
         flavor: ''
       management_network_name: { get_property: [ public_network, resource_id ] }
     relationships:
-      - type: cloudify.relationships.contained_in
-        target: k8s_node_scaling_tier
       - target: kubernetes_node_port
         type: cloudify.openstack.server_connected_to_port
+      - type: cloudify.relationships.contained_in
+        target: scaling_group
     interfaces:
       cloudify.interfaces.lifecycle:
         create:
@@ -78,7 +79,7 @@ node_templates:
             implementation: diamond.diamond_agent.tasks.install
             inputs:
               diamond_config:
-                interval: 1
+                interval: 10
           start: diamond.diamond_agent.tasks.start
           stop: diamond.diamond_agent.tasks.stop
           uninstall: diamond.diamond_agent.tasks.uninstall
@@ -90,19 +91,18 @@ node_templates:
                 CPUCollector: {}
                 MemoryCollector: {}
                 LoadAverageCollector: {}
-                DiskUsageCollector:
-                  config:
-                    devices: x?vd[a-z]+[0-9]*$
                 NetworkCollector: {}
-                ProcessResourcesCollector:
-                  config:
-                    enabled: true
-                    unit: B
-                    measure_collector_time: true
-                    cpu_interval: 0.5
-                    process:
-                      hyperkube:
-                        name: hyperkube
+                ExampleCollector: {}
+          stop:
+            implementation: diamond.diamond_agent.tasks.del_collectors
+            inputs:
+              collectors_config:
+                CPUCollector: {}
+                MemoryCollector: {}
+                LoadAverageCollector: {}
+                DiskUsageCollector: {}
+                NetworkCollector: {}
+                ExampleCollector: {}
 
   kubernetes_security_group:
     type: cloudify.openstack.nodes.SecurityGroup
@@ -116,14 +116,18 @@ node_templates:
     properties:
       openstack_config: *openstack_config
     relationships:
-      - type: cloudify.relationships.contained_in
-        target: k8s_node_scaling_tier
       - type: cloudify.relationships.connected_to
         target: public_network
       - type: cloudify.relationships.depends_on
         target: public_subnet
       - type: cloudify.openstack.port_connected_to_security_group
         target: kubernetes_security_group
+
+  scaling_group:
+    type: cloudify.nodes.Root
+    relationships:
+    - type: cloudify.relationships.contained_in
+      target: openstack
 
   public_subnet:
     type: cloudify.openstack.nodes.Subnet
@@ -143,6 +147,9 @@ node_templates:
       openstack_config: *openstack_config
       use_external_resource: true
       resource_id: { get_secret: public_network_name }
+    relationships:
+    - type: cloudify.relationships.contained_in
+      target: scaling_group
 
   router:
     type: cloudify.openstack.nodes.Router
@@ -161,14 +168,12 @@ node_templates:
       use_external_resource: true
       resource_id: { get_secret: external_network_name }
 
-  k8s_node_scaling_tier:
-    type: cloudify.nodes.Root
-
 groups:
   k8s_node_group:
     members:
       - k8s_node_host
       - kubernetes_node_port
+      - scaling_group
 
   scale_up_group:
     members: [k8s_node_host]
@@ -177,9 +182,9 @@ groups:
         type: scale_policy_type
         properties:
           policy_operates_on_group: true
-          scale_limit: 6
+          scale_limit: 10
           scale_direction: '<'
-          scale_threshold: 6
+          scale_threshold: 10
           service_selector: .*k8s_node_host.*.process.node.cpu.percent
           cooldown_time: 60
         triggers:
@@ -190,7 +195,7 @@ groups:
               workflow_parameters:
                 delta: 1
                 scalable_entity_name: k8s_node_group
-                # scale_compute: true
+                scale_compute: true
 
   scale_down_group:
     members: [k8s_node_host]
@@ -198,7 +203,7 @@ groups:
       auto_scale_down:
         type: scale_policy_type
         properties:
-          scale_limit: 1
+          scale_limit: 2
           scale_direction: '>'
           scale_threshold: 1
           service_selector: .*k8s_node_host.*.process.node.cpu.percent
@@ -211,7 +216,7 @@ groups:
               workflow_parameters:
                 delta: -1
                 scalable_entity_name: k8s_node_group
-                # scale_compute: true
+                scale_compute: true
 
   heal_group:
     members: [k8s_node_host]
@@ -220,7 +225,7 @@ groups:
         type: cloudify.policies.types.host_failure
         properties:
           service:
-            - .*k8s_node_host.*.cpu.total.system
+            - example
           interval_between_workflows: 60
         triggers:
           auto_heal_trigger:
@@ -230,13 +235,6 @@ groups:
               workflow_parameters:
                 node_instance_id: { 'get_property': [ SELF, node_id ] }
                 diagnose_value: { 'get_property': [ SELF, diagnose ] }
-
-policies:
-  kubernetes_node_vms_scaling_policy:
-    type: cloudify.policies.scaling
-    properties:
-      default_instances:  1
-    targets: [k8s_node_group]
 
 outputs:
   deployment-type:
